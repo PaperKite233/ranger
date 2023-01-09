@@ -20,6 +20,10 @@
 package org.apache.ranger.authorization.hadoop.config;
 
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.IOFileFilter;
+import org.apache.commons.io.filefilter.RegexFileFilter;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.Logger;
@@ -27,10 +31,9 @@ import org.apache.ranger.authorization.utils.StringUtil;
 import org.apache.ranger.plugin.policyengine.RangerPolicyEngineOptions;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 
 public class RangerPluginConfig extends RangerConfiguration {
@@ -191,7 +194,56 @@ public class RangerPluginConfig extends RangerConfiguration {
         return userGroups != null && userGroups.size() > 0 && superGroups.size() > 0 && CollectionUtils.containsAny(userGroups, superGroups);
     }
 
+    private void copyConfigFile(String serviceType) {
+        // 这个方法用来适配CDH版本的组件，非CDH组件需要跳出
+        if (serviceType.equalsIgnoreCase("PRESTO")) {
+            return;
+        }
+
+        Map<String, String> map = System.getenv();
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            LOG.info("env key: " + entry.getKey() + ", value: " + entry.getValue());
+        }
+
+        Properties properties = System.getProperties();
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            LOG.info("system key: " + entry.getKey() + ", value: " + entry.getValue());
+        }
+
+        String serviceHome = "CDH_" + serviceType.toUpperCase() + "_HOME";
+        if ("CDH_HDFS_HOME".equals(serviceHome)) {
+            serviceHome = "CDH_HADOOP_HOME";
+        }
+
+        serviceHome = System.getenv(serviceHome);
+        File serviceHomeDir = new File(serviceHome);
+        String userDir = System.getenv("CONF_DIR");
+        File destDir = new File(userDir);
+
+        LOG.info("-----Service Home: " + serviceHome);
+        LOG.info("-----User dir: " + userDir);
+        LOG.info("-----Dest dir: " + destDir);
+
+        IOFileFilter regexFileFilter = new RegexFileFilter("ranger-.+xml");
+        Collection<File> configFileList = FileUtils.listFiles(serviceHomeDir, regexFileFilter, TrueFileFilter.INSTANCE);
+        boolean flag = true;
+        for (File rangerConfigFile : configFileList) {
+            try {
+                if ((serviceType.equalsIgnoreCase("HIVE") || serviceType.equalsIgnoreCase("HDFS")) && flag) {
+                    File file = new File(rangerConfigFile.getParentFile().getPath() + "/xasecure-audit.xml");
+                    FileUtils.copyFileToDirectory(file, destDir);
+                    flag = false;
+                }
+                FileUtils.copyFileToDirectory(rangerConfigFile, destDir);
+            } catch (IOException e) {
+                LOG.error("Copy ranger config file failed.", e);
+            }
+        }
+    }
+
     private void addResourcesForServiceType(String serviceType) {
+        copyConfigFile(serviceType);
+
         String auditCfg    = "ranger-" + serviceType + "-audit.xml";
         String securityCfg = "ranger-" + serviceType + "-security.xml";
         String sslCfg 	   = "ranger-" + serviceType + "-policymgr-ssl.xml";
