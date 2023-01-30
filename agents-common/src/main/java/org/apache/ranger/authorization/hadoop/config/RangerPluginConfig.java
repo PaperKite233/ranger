@@ -217,12 +217,11 @@ public class RangerPluginConfig extends RangerConfiguration {
 
         serviceHome = System.getenv(serviceHome);
         File serviceHomeDir = new File(serviceHome);
-        String userDir = System.getenv("CONF_DIR");
-        File destDir = new File(userDir);
+        String confDir = System.getenv("CONF_DIR");
+        File destDir = new File(confDir);
 
         LOG.info("-----Service Home: " + serviceHome);
-        LOG.info("-----User dir: " + userDir);
-        LOG.info("-----Dest dir: " + destDir);
+        LOG.info("-----Conf dir: " + confDir);
 
         IOFileFilter regexFileFilter = new RegexFileFilter("ranger-.+xml");
         Collection<File> configFileList = FileUtils.listFiles(serviceHomeDir, regexFileFilter, TrueFileFilter.INSTANCE);
@@ -239,6 +238,15 @@ public class RangerPluginConfig extends RangerConfiguration {
                 LOG.error("Copy ranger config file failed.", e);
             }
         }
+
+       /*if (serviceType.equalsIgnoreCase("KAFKA")) {
+            File file = new File("/etc/hadoop/conf/core-site.xml");
+           try {
+               FileUtils.copyFileToDirectory(file, destDir);
+           } catch (IOException e) {
+               LOG.error("Copy ranger config file failed.", e);
+           }
+       }*/
     }
 
     private void addResourcesForServiceType(String serviceType) {
